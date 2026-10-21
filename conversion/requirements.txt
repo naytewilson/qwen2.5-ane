@@ -1,0 +1,11 @@
+# Conversion dependencies — the set this release's conversion was
+# verified with (Python 3.11+, Apple Silicon).
+torch==2.5.0
+coremltools==9.0
+transformers==4.57.6
+huggingface_hub==0.36.2
+numpy==2.2.6
+safetensors==0.8.0
+sentencepiece==0.2.2
+scipy==1.17.1
+protobuf==7.36.2

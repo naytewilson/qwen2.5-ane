@@ -1,0 +1,9 @@
+.build/
+models/
+models_build/
+.venv-convert/
+__pycache__/
+*.pyc
+.DS_Store
+.seat/
+*.log

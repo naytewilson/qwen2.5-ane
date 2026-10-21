@@ -1,0 +1,2 @@
+Swift bindings for the Core ML model specification protos (coremltools
+mlmodel/format/*.proto), generated with protoc-gen-swift.
