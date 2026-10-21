@@ -103,10 +103,11 @@ is a command you paste into the Terminal app.
 5. **Build the server and install the model.** `setup.sh` compiles the
    server and installs the model from the path or URL you give it. It
    then checks that the model loads correctly on the Neural Engine. The
-   model is about 855 MB.
+   model is about 855 MB. It is hosted on Hugging Face at
+   [NayteThaGreat/Qwen2.5-1.5B-Instruct-ANE](https://huggingface.co/NayteThaGreat/Qwen2.5-1.5B-Instruct-ANE).
 
    ```sh
-   QWEN_MODEL_URL=<model download URL> ./setup.sh
+   QWEN_MODEL_URL=https://huggingface.co/NayteThaGreat/Qwen2.5-1.5B-Instruct-ANE/resolve/main/qwen25_monolithic_full_lut4.mlmodelc.zip ./setup.sh
    ```
 
 6. **Start the server.** The first start takes a minute or two while
