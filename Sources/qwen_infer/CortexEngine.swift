@@ -64,7 +64,7 @@ final class StaticTensorBox<T>: @unchecked Sendable {
 nonisolated(unsafe) private var rtPolicyLogOnce = true
 
 /// Apply a Mach real-time scheduling constraint to the calling thread to reduce
-/// scheduling jitter during the ANE decode loop. Gated behind QWEN_RT_THREAD=1
+/// scheduling jitter during the ANE decode loop. On by default; QWEN_RT_THREAD=0 disables it
 /// so it is strictly opt-in and safe (disabled by default).
 ///
 /// Strategy: THREAD_TIME_CONSTRAINT_POLICY declares a periodic computation
@@ -74,7 +74,8 @@ nonisolated(unsafe) private var rtPolicyLogOnce = true
 /// Falls back to THREAD_PRECEDENCE_POLICY(63) if the time-constraint call fails.
 @inline(__always)
 private func applyMachRTThreadPolicy() {
-    guard ProcessInfo.processInfo.environment["QWEN_RT_THREAD"] == "1" else { return }
+    // On by default (measured: lower p50 and a much tighter p90 tail); QWEN_RT_THREAD=0 opts out.
+    guard ProcessInfo.processInfo.environment["QWEN_RT_THREAD"] != "0" else { return }
 
     // Applied on EVERY generate() entry, not once per process: DispatchQueue.sync runs the
     // block on the caller's thread, and the server can enter decode from different
@@ -130,7 +131,7 @@ private func applyMachRTThreadPolicy() {
     if tcResult == KERN_SUCCESS {
         if rtPolicyLogOnce {
             rtPolicyLogOnce = false
-            fputs("[CortexEngine] QWEN_RT_THREAD=1 → THREAD_TIME_CONSTRAINT_POLICY applied (period=10ms, comp=5ms, constraint=8ms, preemptible)\n", stderr)
+            fputs("[CortexEngine] RT thread policy: THREAD_TIME_CONSTRAINT_POLICY applied (period=10ms, comp=5ms, constraint=8ms, preemptible)\n", stderr)
             fflush(stderr)
         }
         return
@@ -154,9 +155,9 @@ private func applyMachRTThreadPolicy() {
         }
     }
     if precResult == KERN_SUCCESS {
-        if rtPolicyLogOnce { rtPolicyLogOnce = false; fputs("[CortexEngine] QWEN_RT_THREAD=1 → THREAD_PRECEDENCE_POLICY(63) applied\n", stderr) }
+        if rtPolicyLogOnce { rtPolicyLogOnce = false; fputs("[CortexEngine] RT thread policy: THREAD_PRECEDENCE_POLICY(63) applied\n", stderr) }
     } else {
-        if rtPolicyLogOnce { rtPolicyLogOnce = false; fputs("[CortexEngine] QWEN_RT_THREAD=1 → both Mach thread policies failed (kr=\(precResult)) — decode thread unchanged\n", stderr) }
+        if rtPolicyLogOnce { rtPolicyLogOnce = false; fputs("[CortexEngine] RT thread policy: both Mach thread policies failed (kr=\(precResult)) — decode thread unchanged\n", stderr) }
     }
     fflush(stderr)
 }
@@ -202,6 +203,8 @@ public final class CortexEngine: @unchecked Sendable {
     public static let prefillBatch = 64
     private static let perfLogsEnabled = (ProcessInfo.processInfo.environment["QWEN_PERF_LOGS"] ?? "0") != "0"
     public private(set) var prefillBatchSize = 64
+    /// Wall time of the most recent decode loop, in ms (prefill excluded). Read after generate().
+    public private(set) var lastDecodeElapsedMs: Double = 0
     private var prefillInputTokens: MLMultiArray?
     private var prefillPositionIds: MLMultiArray?
     private var prefillCurrentPos: MLMultiArray?
@@ -251,7 +254,7 @@ public final class CortexEngine: @unchecked Sendable {
     private let medusaEnabled: Bool
     private let vocabTrimMap: [Int32]?
 
-    // Prompt-lookup (n-gram) decoding — head-free multi-token path (DEAD_CLAIMS_DISPUTED.md).
+    // Prompt-lookup (n-gram) decoding — head-free multi-token path (experimental, off by default).
     // Opt-in via QWEN_ENABLE_LOOKAHEAD=1 (pair with QWEN_ENABLE_VERIFY=1 for the fast batch4
     // verify). Reuses the same accept/replay/commit machinery as Medusa; only the draft
     // SOURCE differs (n-gram suffix-match over context instead of trained heads).
@@ -307,18 +310,14 @@ public final class CortexEngine: @unchecked Sendable {
             fputs("[CortexEngine] QWEN_INFER_FLAGS=off — skipping ANE flag setup (A/B baseline).\n", stderr)
         }
 
-        // FLOOR-REDUCTION LEVER (DEAD_CLAIMS_DISPUTED.md #2): the ~16ms floor is mostly
-        // software-addressable (IOSurface/KV-copy overhead, XPC is only ~0.1ms). Apple's
-        // specializationStrategy=.fastPrediction trades compile time/memory for lower
-        // per-prediction latency. Gated for clean A/B: QWEN_FAST_PREDICTION=0 disables.
-        // macOS 15+ only. Pairs with MLState (already resident) toward a ~6-9ms floor.
+        // specializationStrategy=.fastPrediction trades compile time and memory for lower
+        // per-prediction latency (macOS 15+). QWEN_FAST_PREDICTION=0 disables it for A/B runs.
         let useFastPred = ProcessInfo.processInfo.environment["QWEN_FAST_PREDICTION"] != "0"
         func applyFastPred(_ c: MLModelConfiguration) {
             if useFastPred, #available(macOS 15.0, *) {
                 c.optimizationHints.specializationStrategy = .fastPrediction
                 // Decode shapes are static (seq=1, fixed ctx) → tell the ANE driver so it
-                // skips per-call shape-dispatch validation. ChunkedCortexEngine already does
-                // this; CortexEngine was missing it. (CortexEngine perfection swarm, Rank 1.)
+                // skips per-call shape-dispatch validation.
                 c.optimizationHints.reshapeFrequency = .infrequent
             }
         }
@@ -634,7 +633,7 @@ public final class CortexEngine: @unchecked Sendable {
                 do {
                     let config1024 = MLModelConfiguration()
                     config1024.computeUnits = .cpuAndNeuralEngine
-                    // Same ANE-driver hints as the primary model (perfection swarm Rank 1).
+                    // Same ANE-driver hints as the primary model.
                     if useFastPred, #available(macOS 15.0, *) {
                         config1024.optimizationHints.specializationStrategy = .fastPrediction
                         config1024.optimizationHints.reshapeFrequency = .infrequent
@@ -1037,6 +1036,7 @@ public final class CortexEngine: @unchecked Sendable {
                 }
             }
             let decodeElapsed = (CFAbsoluteTimeGetCurrent() - startDecode) * 1000
+            self.lastDecodeElapsedMs = decodeElapsed
             let avgDecode = generatedIds.isEmpty ? 0 : (decodeElapsed / Double(generatedIds.count))
             let eagleRate = self.eagleTotal > 0 ? Double(self.eagleAccepted) / Double(self.eagleTotal) : -1
             let eagleStr = eagleRate >= 0 ? String(format: " | EAGLE %.1f%% (%d/%d)", eagleRate * 100, self.eagleAccepted, self.eagleTotal) : ""

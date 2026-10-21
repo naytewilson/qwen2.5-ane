@@ -22,8 +22,7 @@ func resolveProjectRoot() -> String {
     return FileManager.default.currentDirectoryPath
 }
 let PROJECT_ROOT = resolveProjectRoot()
-// R1 Fix #5: Default to the Qwen2.5 monolithic (PROJECT.md production baseline = 54.5 tok/s).
-// DeepSeek-R1 distill path is opt-in via QWEN_MODEL_PATH override.
+// Default model: the Qwen2.5 monolithic artifact under models/. QWEN_MODEL_PATH overrides it.
 // Prefer the multi-function export (infer + batched prefill) when present, matching
 // the CLI router; --serve and --compute-plan resolve their model through this.
 let MODEL_PATH: String = {
@@ -546,9 +545,9 @@ func runValidateVerify() async throws {
 //
 // Usage:
 //   python3 -c "import json,sys; seqs=...; print(json.dumps(seqs))" | \
-//     ~/bin/qwen_infer --generate-labels > /tmp/labels.json
+//     .build/release/qwen-ane --generate-labels > labels.json
 //
-// Speed: uses batched prefill (batch=64) → ~47 tok/s effective throughput.
+// Uses batched prefill (batch 64).
 // ─────────────────────────────────────────────────────────────────────────────
 func runGenerateLabels() async throws {
     let modelPath = "\(PROJECT_ROOT)/models/anemll_qwen25_1.5b_mono_ctx512_lut4/qwen25_monolithic_full_lut4.mlmodelc"

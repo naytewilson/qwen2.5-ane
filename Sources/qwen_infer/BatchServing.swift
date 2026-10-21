@@ -12,7 +12,7 @@
 //        with longer neighbors (shared mask forces it to attend the long lane's columns).
 //    => v1 coalesces ONLY equal prompt-length requests. Different lengths fall back to singleton
 //       cohorts (B=1, still correct). Variable-length batching needs a re-export with PER-LANE
-//       position_ids[4,1] + per-lane mask[4,1,1,512] (Opus converter lane) — then drop the
+//       position_ids[4,1] + per-lane mask[4,1,1,512] — then drop the
 //       length-bucket key and this layer batches arbitrary traffic unchanged.
 //
 //  Concurrency: InferenceActor.infer is `async`; at its `await backend.generate` point the actor
@@ -156,7 +156,7 @@ actor BatchInferenceActor {
 
 // MARK: - B=4 ANE engine (the real BatchDecodeEngine — equal-length lock-step decode)
 
-/// Wraps the deployable B=4 monolithic .mlmodelc. Decode contract (D030, PROVEN):
+/// Wraps the deployable B=4 monolithic .mlmodelc. Decode contract (verified on device):
 ///   input_ids   [B,1] int32  — per-lane new token (only B-leading input)
 ///   position_ids [1]  int32  — SHARED scalar (lock-step)
 ///   current_pos  [1]  int32  — SHARED scalar
@@ -197,7 +197,7 @@ final class B4BatchEngine: BatchDecodeEngine, @unchecked Sendable {
         self.nChunk = outNames.count
         self.chunk  = lastDim
 
-        // Graph batch dim: the D030 deployable declares input_ids [B,1]; fresh anemll-v0.3.5
+        // Graph batch dim: the B=4 export declares input_ids [B,1]; fresh anemll-v0.3.5
         // exports declare [1,1] (single-lane graph, single-lane KV state). Detect it here so
         // the serve path can drive either graph instead of throwing a CoreML shape mismatch
         // on the first prefill prediction (the "0 tokens in ~16ms" failure).

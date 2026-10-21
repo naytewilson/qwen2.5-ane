@@ -4,6 +4,9 @@ struct BackendGenerationResult: Sendable {
     let tokenIds: [Int32]
     let decodeTimesMs: [Double]?
     let includesPrompt: Bool
+    /// Wall time of the decode loop only (first decode step through the last token; no
+    /// prompt prefill, no tokenization). nil when the backend cannot separate it.
+    var decodeElapsedMs: Double? = nil
 }
 
 protocol InferenceBackend: AnyObject, Sendable {
@@ -127,7 +130,7 @@ final class CortexBackendAdapter: InferenceBackend, @unchecked Sendable {
         let result = try engine.generate(promptIds: promptIds, maxTokens: maxTokens, formatEnforcer: enforcer) { tokenId in
             onToken(tokenId, nil)
         }
-        return BackendGenerationResult(tokenIds: result.0, decodeTimesMs: result.1, includesPrompt: false)
+        return BackendGenerationResult(tokenIds: result.0, decodeTimesMs: result.1, includesPrompt: false, decodeElapsedMs: engine.lastDecodeElapsedMs)
     }
 }
 

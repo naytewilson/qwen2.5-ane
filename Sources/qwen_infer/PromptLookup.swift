@@ -1,13 +1,12 @@
-// PromptLookup.swift — n-gram PROMPT-LOOKUP candidate generator (2026-06-18 Opus)
+// PromptLookup.swift — n-gram prompt-lookup candidate generator (experimental, off by default)
 // =============================================================================
-// THE LIVE PATH to >55 tok/s (see docs/DEAD_CLAIMS_DISPUTED.md). The research swarm
-// ranked n-gram/prompt-lookup the #1 multi-token decode method for the ANE:
+// Prompt lookup proposes continuation tokens by suffix-matching the context. Why it suits the ANE:
 //   • ZERO extra model weights, ZERO conv-budget cost (vs Medusa heads)
 //   • fixed K-candidate batch → fits the existing batch4 `verify` function cleanly
 //     (vs Jacobi's variable-shape window, which fights the ANE static graph)
 //   • candidates verified in ONE batched ANE dispatch (rides the seq-amortization
 //     proven in model.mil: infer(seq1) & prefill(seq4) share 212 identical convs)
-//   • 1.1–2.4× on input-grounded tasks (code, RAG, screen-context, "summarize this")
+//   • published speedups are task-dependent; none is measured or claimed for this build
 //
 // This is SELF-CONTAINED — no dependency on the pruned DraftEngine/NeuralDraft/
 // SpeculativeEngine scaffolding. It only produces candidate tokens; CortexEngine's

@@ -194,6 +194,11 @@ actor InferenceActor {
             ? max(0, generated.tokenIds.count - alignedTokens.count)
             : generated.tokenIds.count
         let tps = elapsed > 0 ? Double(generatedCount) / elapsed : 0
+        // Decode-only speed: the engine's decode-loop wall time, excluding prompt prefill and
+        // tokenization. Not reported when the backend cannot separate the two.
+        let decodeTps: Double? = generated.decodeElapsedMs.flatMap { ms in
+            ms > 0 ? Double(generatedCount) / (ms / 1000) : nil
+        }
 
         // Report the mode actually in use. The production ANE path is a plain single-token
         // decode loop; only an explicitly configured EAGLE head makes it speculative.
@@ -211,7 +216,7 @@ actor InferenceActor {
             tokens_generated: generatedCount,
             elapsed_sec: elapsed,
             tok_per_sec: tps,
-            decode_tok_per_sec: tps,
+            decode_tok_per_sec: decodeTps,
             prompt_tokens: alignedTokens.count
         )
     }
@@ -473,8 +478,8 @@ func runDaemon() async throws {
         }
 
         if ProcessInfo.processInfo.environment["QWEN_B4_BATCH"] == "1" {
-            // Request-coalescing B=4 batched decode (D030). Equal-length cohorts only (shared
-            // position/mask export → lock-step lanes; PROVEN per-lane correct, spi/lane_isolation.swift).
+            // Request-coalescing B=4 batched decode (experimental, off by default). Equal-length cohorts only (shared
+            // position/mask export → lock-step lanes; verified per-lane correct on device).
             let b4Path = ProcessInfo.processInfo.environment["QWEN_B4_MODEL_PATH"]
                 ?? "\(PROJECT_ROOT)/models/anemll_qwen25_1.5b_mono_ctx512_lut4_batch4/qwen25_b4_monolithic_lut4.mlmodelc"
             let bSize = Int(ProcessInfo.processInfo.environment["QWEN_B4_BATCH_SIZE"] ?? "")

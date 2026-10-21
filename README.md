@@ -1,23 +1,50 @@
 # qwen2.5-ane — Qwen2.5-1.5B on the Apple Neural Engine
 
-A native Swift server that runs **Qwen2.5-1.5B-Instruct** on the
-**Apple Neural Engine** (ANE) and exposes an **OpenAI-compatible HTTP API**.
-There is no Python at runtime, no external Swift packages, and no network
-access: the model runs entirely on your Mac.
+A complete transformer language model running on the **Apple Neural
+Engine** (ANE). All 28 transformer layers run on the ANE: attention, the
+KV cache, the MLPs and the LM head. Nothing runs on the GPU. The CPU
+handles only the token-embedding lookup at the input and the argmax at the
+output.
+
+The model is deliberately small: **Qwen2.5-1.5B-Instruct**, 512-token
+context. It is not chosen for size or context length. It shows that a
+stateful LLM can be placed fully on the Neural Engine, which is often
+assumed not to be possible. A native Swift server exposes it through an
+**OpenAI-compatible HTTP API**, with no Python at runtime and no network
+access.
 
 - Monolithic stateful LUT4 Core ML model, KV cache resident in `MLState`
-- Transformer compute 100% on the ANE (only the final argmax tail runs on CPU)
 - Batched prompt prefill, 64 tokens per ANE dispatch (multi-function `infer` + `prefill` artifact)
 - `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/health`,
   SSE streaming, optional bearer auth
+
+## ANE placement, and how to check it yourself
+
+Core ML reports, per operation, which device it will run on. For this
+model:
+
+| Function | Neural Engine | CPU | GPU |
+|---|---|---|---|
+| `infer` (one token per call) | 2147 ops | 82 ops: the embedding lookup (1 `gather`), the argmax over the 16 LM-head chunks, and small position/mask index ops | 0 |
+| `prefill` (64 tokens per call) | 2360 ops | 13 ops: the embedding lookup and causal-mask/position setup | 0 |
+
+Every transformer layer is on the Neural Engine, including the attention,
+the KV-cache reads and writes and the LM-head projection. Run the same audit on your own Mac:
+
+```sh
+.build/release/qwen-ane --compute-plan models/qwen25-1.5b-ane-ctx512-lut4/qwen25_monolithic_full_lut4.mlmodelc
+```
+
+It loads one compute plan per function and lists every op that is not on
+the Neural Engine.
 
 ## What it is for
 
 The Neural Engine is a dedicated machine-learning processor in every Apple
 Silicon chip. Most apps leave it idle while the CPU and GPU do the work.
-This server puts a 1.5-billion-parameter chat model on it. The model
-answers with low latency, uses little power, and leaves the CPU and GPU
-free for whatever else you are running.
+This server puts a 1.5-billion-parameter chat model on it. Because the
+work runs on the Neural Engine, the CPU and GPU stay free for whatever else
+you are running. Power draw has not been measured for this release.
 
 Typical uses:
 
@@ -26,8 +53,8 @@ Typical uses:
 - **Drop-in backend for existing tools.** Any app, script or editor plugin
   that accepts a custom OpenAI base URL can use it unchanged.
 - **Background text tasks.** Classification, tagging, short extraction and
-  routing jobs that run continuously on a laptop without heating it up or
-  slowing it down.
+  routing jobs that run in the background without occupying the CPU or
+  GPU.
 - **Offline and air-gapped work.** Once the model is downloaded, nothing
   leaves the machine.
 - **A reference for ANE deployment.** A working, measured example of a
@@ -64,20 +91,17 @@ requests discarded, 20 measured requests of 128 tokens each):
 
 | Metric | ms / token | tok/s |
 |---|---|---|
-| Decode, fastest request (min-of-burst) | 21.20 | 47.2 |
-| Decode, median request (p50) | 22.68 | 44.1 |
-| Decode, slow tail (p90) | 24.26 | 41.2 |
-| Time to first token, 413-token prompt | 0.28 s | — |
+| Decode, fastest request (min-of-burst) | 18.95 | 52.8 |
+| Decode, median request (p50) | 19.32 | 51.8 |
+| Decode, slow tail (p90) | 21.95 | 45.6 |
+| Time to first token, 413-token prompt | 0.24 s | — |
 
-**Raw ANE dispatch floor.** A bare min-of-120 dispatch burst (no server),
-measured on the previous artifact, whose `infer` graph has the same shape
-and placement, gives:
-
-- 18.8 ms per token minimum
-- 19.4–19.9 ms per token median (~51 tok/s)
-
-The engine adds about 1 ms per token on top of that floor. The rest of the
-spread comes from the chip's thermal state between requests.
+**Compared with the raw hardware.** A bare min-of-120 dispatch burst, with
+no server, measured 18.8 ms per token minimum and 19.4–19.9 ms median on
+the previous artifact, whose `infer` graph has the same shape and
+placement. The server matches that floor: its own work between ANE calls
+measures about 0.05 ms per token. The slow tail is variation inside the
+ANE call itself, not in the server.
 
 The server reports decode speed in every non-streaming response under
 `timings.decode_tok_per_sec`. Prompt prefill is excluded from that figure.
@@ -90,8 +114,9 @@ is a command you paste into the Terminal app.
 1. **Check your Mac.** You need Apple Silicon (an M-series or A-series
    chip) and macOS 15 or later. Open  → *About This Mac* and look at
    *Chip*.
-2. **Install Xcode** from the Mac App Store (version 16 or later), open it
-   once, and accept the license. This provides the Swift compiler.
+2. **Install Xcode** from the Mac App Store (version 16.3 or later, for
+   Swift 6.1), open it once, and accept the license. This provides the
+   Swift compiler.
 3. **Open Terminal** (Applications → Utilities → Terminal).
 4. **Download this project:**
 
@@ -134,6 +159,10 @@ is a command you paste into the Terminal app.
    - API key: any value, unless you set one (below)
 
 To stop the server, press `Ctrl-C` in its Terminal window.
+
+**Tested on:** MacBook with Apple A18 Pro, 8 GB, macOS 27.2, Swift 6.4.
+The package targets macOS 15 and later on any Apple Silicon Mac, but other
+chips and OS versions have not been measured. Speeds will differ by chip.
 
 ## Using it from code
 
