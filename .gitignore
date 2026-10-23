@@ -1,7 +1,7 @@
-.build/
+.build
 models/
-models_build/
-.venv-convert/
+models_build
+.venv-convert
 __pycache__/
 *.pyc
 .DS_Store
