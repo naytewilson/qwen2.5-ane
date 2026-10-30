@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If this public ANE implementation supports your work, cite the repository and exact revision used. See PROVENANCE.md for upstream source and artifact attribution. No DOI is claimed."
+type: software
+title: "qwen2.5-ane: Qwen2.5-1.5B inference on the Apple Neural Engine"
+authors:
+  - family-names: Wilson
+    given-names: Nayte
+    affiliation: "Independent researcher"
+    website: "https://macbrainslabs.org"
+repository-code: "https://github.com/naytewilson/qwen2.5-ane"
+url: "https://github.com/naytewilson/qwen2.5-ane"
+license: MIT
+abstract: "A public native Swift inference-server package and provenance record for a specific Qwen2.5-1.5B-Instruct LUT4/Core ML artifact and Apple Neural Engine configuration. Results have model, compiler, platform and measurement boundaries; no raw private experimental receipts or model weights are included in this source repository."
