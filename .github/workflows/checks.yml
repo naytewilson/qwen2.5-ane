@@ -29,7 +29,7 @@ jobs:
 
   macos-build:
     name: Swift release compilation (macOS, no model)
-    runs-on: macos-15
+    runs-on: macos-15-arm64
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
