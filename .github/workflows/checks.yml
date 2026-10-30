@@ -1,0 +1,43 @@
+name: Public source checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-source-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    name: Shell and artifact-ignore regression (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Shell syntax
+        run: bash -n setup.sh smoke.sh bench.sh scripts/test-gitignore-symlinks.sh
+      - name: Generated directory and symlink ignore regression
+        run: bash scripts/test-gitignore-symlinks.sh .
+
+  macos-build:
+    name: Swift release compilation (macOS, no model)
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Select a compatible Xcode toolchain
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_16.4.app
+          swift --version
+      - name: Compile native CLI without weights
+        run: swift build -c release
