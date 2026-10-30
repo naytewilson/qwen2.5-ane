@@ -5,6 +5,7 @@ title: "qwen2.5-ane: Qwen2.5-1.5B inference on the Apple Neural Engine"
 authors:
   - family-names: Wilson
     given-names: Nayte
+    orcid: "https://orcid.org/0009-0003-4026-8212"
     affiliation: "Independent researcher"
     website: "https://macbrainslabs.org"
 repository-code: "https://github.com/naytewilson/qwen2.5-ane"
