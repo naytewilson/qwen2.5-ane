@@ -1,0 +1,45 @@
+name: Portable source validation
+
+# No model downloads, model weights, hosted macOS jobs, or private runners.
+# These checks do not prove Core ML/ANE compilation, placement, parity or speed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: Portable source checks (not ANE inference)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out source without retained credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Check shell syntax and ignored-artifact rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n setup.sh smoke.sh bench.sh scripts/test-gitignore-symlinks.sh
+          bash scripts/test-gitignore-symlinks.sh .
+
+      - name: Check Swift manifest and syntax only (Linux)
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift --version
+          swift package dump-package > "$RUNNER_TEMP/qwen-package.json"
+          swift -frontend -parse Sources/qwen_infer/*.swift
+
+      - name: Check public tokenizer metadata and tracked artifact paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/check-public-source.mjs
+          node scripts/check-public-source.mjs

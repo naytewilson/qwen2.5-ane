@@ -11,6 +11,10 @@ documentation corrections and independently checkable measurements.
 - Keep commits focused. Include a test or concrete before/after validation when possible.
 - Run the portable checks: `bash -n setup.sh smoke.sh bench.sh scripts/test-gitignore-symlinks.sh`
   and `bash scripts/test-gitignore-symlinks.sh .`.
+- The GitHub Actions **Portable source validation** workflow checks shell and Swift
+  syntax, package manifest parsing, tokenizer JSON integrity, and known restricted
+  tracked artifact paths on Ubuntu. It does **not** build the macOS binary or
+  validate ANE placement, numerical parity, performance, or every possible secret.
 - On a suitable macOS host with Xcode 16.3 or later and Swift 6.1 or later,
   run `swift build -c release`. ANE placement and performance require an
   Apple Silicon Mac, a compiled model artifact and the stated workload.
