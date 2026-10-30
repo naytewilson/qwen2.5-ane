@@ -580,7 +580,7 @@ func runHTTPSSEServer(inferActor: InferenceActor, port: UInt16 = 45282) async th
     let host = env["QWEN_SSE_HOST"] ?? "127.0.0.1"
     let isLoopback = host == "127.0.0.1" || host == "localhost" || host == "::1"
 
-    let backendName = await inferActor.backend.backendName
+    let backendName = inferActor.backend.backendName
     let context = ServerContext(
         modelId: env["QWEN_MODEL_ID"] ?? "qwen2.5-1.5b-ane",
         backendName: backendName,

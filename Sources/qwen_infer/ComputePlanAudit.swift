@@ -98,7 +98,7 @@ func runComputePlanAudit(modelPath: String) async {
         }
     }
 
-    var config = MLModelConfiguration()
+    let config = MLModelConfiguration()
     config.computeUnits = .cpuAndNeuralEngine
 
     print("[audit] loading compute plan for \(url.path) …")
