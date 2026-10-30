@@ -100,7 +100,7 @@ actor BatchInferenceActor {
             Task { await self.runCohort() }           // a length-bucket is full → fire now
         } else if !timerScheduled, !pending.isEmpty {
             timerScheduled = true                      // partial → fire the oldest after the window
-            Task { try? await Task.sleep(nanoseconds: windowNs); await self.onTimer() }
+            Task { try? await Task.sleep(nanoseconds: windowNs); self.onTimer() }
         }
     }
 
